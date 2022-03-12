@@ -64,7 +64,7 @@ process:
   ## reference voltage: 255, 255/3.6*3.3
   V0: 255/3.6*3.3
   ## constant factor: 1
-  R0_RECI: ~
+  R0_RECI: 0.5
   ## convert voltage to resistance: true
   convert: true
   ## time of warming up in seconds: 1

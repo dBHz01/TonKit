@@ -6,6 +6,7 @@ import argparse
 import matplotlib.pyplot as plt
 import numpy as np
 import json
+import time
 from matsense.tools import load_config, make_action
 from matsense.uclient import Uclient
 from matsense.process import Processor
@@ -26,10 +27,40 @@ def file_generator(filename):
         yield line[0], line[1], line[2]
 
 
+def ave_cali_generator(generator):
+    while True:
+        data = next(generator)
+        for i, row in enumerate(data):
+            for j, line in enumerate(row):
+                if (cali_data[i][j] != 0):
+                    data[i][j] = line / cali_data[i][j]
+        yield data
+
+
+def cali_each_point():
+    print("begin calibrate, please move your tongue")
+    cali_time = 20
+    begin_time = time.time()
+    max_pressure = []
+    for i in range(13):
+        max_pressure.append([])
+    for i in range(13):
+        for j in range(14):
+            max_pressure[i].append(0)
+    while (time.time() - begin_time < cali_time):
+        raw_data = next(my_processor.gen_wrapper(tongue_client.gen()))
+        for i, row in enumerate(max_pressure):
+            for j, line in enumerate(row):
+                if line < raw_data[i][j]:
+                    max_pressure[i][j] = raw_data[i][j]
+        time.sleep(0.02)
+    print(max_pressure)
+    global cali_data
+    cali_data = max_pressure
+    return max_pressure
+
+
 def scatter_plot():
-    '''
-    scatter plot
-    '''
 
     plt.ion()
 
@@ -52,14 +83,12 @@ def scatter_plot():
 
             color_list = np.array(val)
 
-            print(row, col, val)
-
             plt.xlim(0, 1)
             plt.ylim(0, 1)
 
             plt.scatter(x_index, y_index, c=color_list, marker="o")
 
-        plt.pause(0.02)
+        plt.pause(0.05)
 
     plt.ioff()
 
@@ -68,6 +97,7 @@ def scatter_plot():
 
 
 def main():
+    # cali_each_point()
     scatter_plot()
 
 
@@ -106,5 +136,6 @@ if __name__ == "__main__":
         elif (args.mock):
             my_generator = mock_generator()
         else:
-            my_generator = my_processor.gen_points(tongue_client.gen())
+            my_generator = my_processor.gen_points(
+                my_processor.gen_wrapper(tongue_client.gen()))
         main()
