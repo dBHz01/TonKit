@@ -12,6 +12,9 @@ from matsense.uclient import Uclient
 from matsense.process import Processor
 
 BASE_DATA_DIR = "./data/"
+LETTER_IN_KEYBOARD = [['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', ''],
+                      ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ''],
+                      ['Z', 'X', 'C', 'V', 'B', 'N', 'M', '']]
 
 
 def mock_generator():
@@ -60,6 +63,30 @@ def cali_each_point():
     return max_pressure
 
 
+def draw_border():
+    # all organized as point
+    row = np.array([[[0.1, 1], [0.9, 1]], [[0.1, 0.7], [0.9, 0.7]], [
+                   [0.2, 0.3], [0.8, 0.3]], [[0.35, 0], [0.65, 0]]])
+    col_1 = np.array([[[i * (0.9 - 0.1) / 10 + 0.1, 0.7],
+                     [i * (0.9 - 0.1) / 10 + 0.1, 1]] for i in range(11)])
+    col_2 = np.array([[[i * (0.8 - 0.2) / 9 + 0.2, 0.3],
+                     [i * (0.8 - 0.2) / 9 + 0.2, 0.7]] for i in range(10)])
+    col_3 = np.array([[[i * (0.65 - 0.35) / 7 + 0.35, 0],
+                     [i * (0.65 - 0.35) / 7 + 0.35, 0.3]] for i in range(8)])
+    col = [col_1, col_2, col_3]
+    for line in row:
+        plt.plot(line[:, 0], line[:, 1], color='#000000')
+    gap_lengths = [(0.9 - 0.1) / 10, (0.8 - 0.2) / 9, (0.65 - 0.35) / 7]
+    for i, c in enumerate(col):
+        gap_length = gap_lengths[i]
+        for j, line in enumerate(c):
+            plt.plot(line[:, 0], line[:, 1], color='#000000')
+            # 0.01 for half size of the letter
+            plt.text(line[0][0] + gap_length / 2 - 0.01,
+                     np.average([line[0][1], line[1][1]]), LETTER_IN_KEYBOARD[i][j])
+    plt.show()
+
+
 def scatter_plot():
 
     plt.ion()
@@ -67,6 +94,7 @@ def scatter_plot():
     for _ in my_generator:
         # clean previous picture
         plt.cla()
+        draw_border()
 
         row, col, val = next(my_generator)
 
@@ -99,6 +127,7 @@ def scatter_plot():
 def main():
     # cali_each_point()
     scatter_plot()
+    # draw_border()
 
 
 if __name__ == "__main__":
