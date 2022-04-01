@@ -21,13 +21,15 @@ BASE_DATA_DIR = "./data/"
 LETTER_IN_KEYBOARD = [['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', ''],
                       ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ''],
                       ['Z', 'X', 'C', 'V', 'B', 'N', 'M', '']]
+TYPE_IN_BREAK_TIME = 1  # seconds
+CHOOSE_HOLD_TIME = 0.8  # seconds
 
 # shared variable in threads
 is_recording = False
 gesture_typing_data = []
 stop_showing = False
 current_data = None
-
+inst = None
 
 IP = "localhost"
 PORT = 8081
@@ -84,7 +86,10 @@ class CursorClient:
         self.my_socket.send((cmd+"\n").encode())
 
     def sendPressure(self, pressure):
-        self.my_socket.send((str(pressure)+"\n").encode())
+        self.my_socket.send(('pressure' + " " + str(pressure) + "\n").encode())
+
+    def sendMaxForce(self, pressure):
+        self.my_socket.send(('maxforce' + " " + str(pressure) + "\n").encode())
 
 
 my_remote_handle = CursorClient(IP, PORT)
@@ -224,7 +229,7 @@ def scatter_plot(my_generator, output_filename):
 
 
 def get_reshape_paras():
-    global current_data
+    global current_data, inst
     reshape_paras = []
     pos_name = ['q_pos', 'p_pos', 'a_pos', 'l_pos', 'z_pos', 'm_pos']
     pos = [np.array([0.5 * (0.9 - 0.1) / 10 + 0.1, 0.85]), np.array([-0.5 * (0.9 - 0.1) / 10 + 0.9, 0.85]), np.array([0.5 * (0.8 - 0.2) / 9 + 0.2, 0.5]),
@@ -234,10 +239,12 @@ def get_reshape_paras():
         input("please press " + pos_name[i])
         # (q_pos, p_pos, a_pos, l_pos, z_pos, m_pos) .x
         row = current_data[0]
-        reshape_paras.append(max(row, pos[i][0]) if (i % 2 == 0)  else min(row, pos[i][0]))
+        reshape_paras.append(max(row, pos[i][0]) if (
+            i % 2 == 0) else min(row, pos[i][0]))
         print(row)
         i += 1
-    
+    inst = "idle"
+
     # for reshaping the keyboard
     my_remote_handle.reshapeKB([reshape_paras[0], 0.85,
                                 reshape_paras[1], 0.85,
@@ -249,9 +256,8 @@ def get_reshape_paras():
 
 
 def web_plot(my_generator, output_filename):
-    global my_remote_handle, current_data
+    global my_remote_handle, current_data, inst
 
-    global is_recording, gesture_typing_data
     for _ in my_generator:
         if stop_showing:
             break
@@ -260,54 +266,78 @@ def web_plot(my_generator, output_filename):
         row, col, val = next(my_generator)
         current_data = [row, col, val]
 
-        # record all data
-        if (output_filename != None):
-            with open(BASE_DATA_DIR + output_filename, "a") as file:
-                file.write(json.dumps([row, col, val]) + "\n")
-
-        if (val > 0.5):
+        if (val > 1):
+            # record all data
+            if (output_filename != None):
+                with open(BASE_DATA_DIR + output_filename, "a") as file:
+                    file.write(json.dumps([row, col, val]) + "\n")
             my_remote_handle.sendToKBPlot("event", 2, row, col)
-            # if begin recording, then record data to gesture_typing_data
-            # else clean it
-            if (is_recording):
-                gesture_typing_data.append([row, col, val])
-            else:
-                gesture_typing_data = []
+            gesture_typing_data.append(current_data)
         else:
             my_remote_handle.sendToKBPlot("event", 2, -1, -1)
-            
+
         time.sleep(0.01)
     return
 
 
-def interactive_mode():
-    global is_recording, gesture_typing_data, stop_showing, my_remote_handle, current_data
+def interactive_mode(interactive=False):
+    global gesture_typing_data, stop_showing, my_remote_handle, current_data, inst, is_recording
+    last_press_time = None
     while True:
-        inst = input()
+        if (interactive):
+            inst = input()
         if (inst == "r"):
-            # begin recording
-            is_recording = True
+            # recording
+            is_recording = True  # only for scatter plot use
+            row, col, val = current_data[0], current_data[1], current_data[2]
+            if (val > 1):
+                last_press_time = time.time()
+            else:
+                if (last_press_time):
+                    if (time.time() - last_press_time > TYPE_IN_BREAK_TIME):
+                        inst = "s"
+                        last_press_time = None
         elif (inst == "s"):
             # stop recording and check top_k
+            print("stop recording")
+            if (len(gesture_typing_data) == 0):
+                inst = "r"
             is_recording = False
             top_k = check_top_k(gesture_typing_data, 10)
             my_remote_handle.setCandidates([i for i in top_k[:5]])
             gesture_typing_data = []
+            inst = "c"  # stop recording and then choose word at once
         elif (inst == "e"):
             stop_showing = True
+            inst = None
         elif (inst == 'c'):
             # choose word
-            if (current_data[0] < 0.5):
-                if (current_data[1] < 0.5):
+            start_time = time.time()
+            start_status = [False, False]
+            while (time.time() - start_time < CHOOSE_HOLD_TIME):
+                if (current_data[2] < 1):
+                    start_time = time.time()
+                    continue
+                if ((current_data[0] < 0.5) != start_status[0] or (current_data[1] < 0.5) != start_status[1]):
+                    start_status[0] = current_data[0] < 0.5
+                    start_status[1] = current_data[1] < 0.5
+                    start_time = time.time()
+            if (start_status[0]):
+                if (start_status[1]):
                     my_remote_handle.selectWord('left')
                 else:
                     my_remote_handle.selectWord('up')
             else:
-                if (current_data[1] < 0.5):
+                if (start_status[1]):
                     my_remote_handle.selectWord('down')
                 else:
                     my_remote_handle.selectWord('right')
-                    
+            inst = 'idle'
+        elif (inst == 'idle'):
+            if (current_data[2] < 1):
+                gesture_typing_data = []
+                inst = 'r'
+                print("start typing")
 
         time.sleep(0.1)
 

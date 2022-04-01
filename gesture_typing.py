@@ -18,7 +18,7 @@ def euclidean_distance(p: np.ndarray, q: np.ndarray) -> float:
 
 
 def init_all(reshape_paras):
-    init_word_set(1000)
+    init_word_set(5000)
     init_keyboard_pos(reshape_paras)
     init_pattern_set()
 
@@ -78,8 +78,11 @@ def generate_standard_pattern(word: str, num_nodes: int, distribute):
 def init_pattern_set():
     global DIST_PATTERN
     for w in WORD_SET:
+        w_with_q = w
+        # if (w[0].lower() != 'q'):
+        #     w_with_q = "q" + w
         dist_path = generate_standard_pattern(
-            w, int((len(w) * 6.6457 + 4.2080) / 2),
+            w_with_q, int((len(w) * 6.6457 + 4.2080) / 2),
             lambda x: -2 * x**3 + 3 * x**2)
         dist_path_x = [d[0] for d in dist_path]
         dist_path_y = [d[1] for d in dist_path]
@@ -197,19 +200,26 @@ def check_top_k(data, k):
         #     d = 10**(-10)
 
         # q.put((0.6 * d2 - 0.4 * 0.1 * np.log10(d), w))
-        q.put((0.4 * 0.1 * d1 + 0.6 * d2, w))
+        q.put((-1 * 0.4 * 0.5 * d1 + 0.6 * d2, w))
+        # if (w == "is"):
+        #     print("is", -1 * 0.4 * d1 + 0.6 * d2, d1, d2)
+        # if (w == "quot"):
+        #     print("quot", -1 * 0.4 * d1 + 0.6 * d2, d1, d2)
 
     top = []
+    top_acc = []
     for p in range(k):
         try:
             tmp = q.get_nowait()
             top.append(tmp[1])
+            top_acc.append(tmp[0])
             # if word in top:
             #     top_k[p] += 1
         except:
             break
     # print(word, top[:10])
     print(top[:10])
+    print(top_acc[:10])
     # prev = word
     print("total: %d" % total)
     # for i in range(k):
