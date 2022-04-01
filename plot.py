@@ -91,6 +91,11 @@ class CursorClient:
     def sendMaxForce(self, pressure):
         self.my_socket.send(('maxforce' + " " + str(pressure) + "\n").encode())
 
+    def sendPos(self, x, y):
+        paras = ['grid', x, y]
+        self.my_socket.send(
+            str(" ".join([str(item) for item in paras]) + "\n").encode())
+
 
 my_remote_handle = CursorClient(IP, PORT)
 
@@ -277,7 +282,28 @@ def web_plot(my_generator, output_filename):
             my_remote_handle.sendToKBPlot("event", 2, -1, -1)
 
         time.sleep(0.01)
-    return
+
+
+def grid_plot(my_generator, output_filename):
+    for _ in my_generator:
+        if stop_showing:
+            break
+
+        # generate data
+        row, col, val = next(my_generator)
+        current_data = [row, col, val]
+
+        if (val > 1):
+            # record all data
+            if (output_filename != None):
+                with open(BASE_DATA_DIR + output_filename, "a") as file:
+                    file.write(json.dumps([row, col, val]) + "\n")
+            my_remote_handle.sendPos(row, col)
+            gesture_typing_data.append(current_data)
+        else:
+            my_remote_handle.sendPos(-1, -1)
+
+        time.sleep(0.015)
 
 
 def interactive_mode(interactive=False):
@@ -342,16 +368,19 @@ def interactive_mode(interactive=False):
         time.sleep(0.1)
 
 
-def main(my_generator):
+def main(my_generator, mode):
     # cali_each_point()
     # scatter_plot()
     # p = Process(target=web_plot, args=(my_generator, output_filename))
     # p.start()
-    thread.start_new_thread(web_plot, (my_generator, output_filename))
-    reshape_paras = get_reshape_paras()
-    print("reshape_paras", reshape_paras)
-    init_all(reshape_paras)
-    interactive_mode()
+    if (mode == "keyboard"):
+        thread.start_new_thread(web_plot, (my_generator, output_filename))
+        reshape_paras = get_reshape_paras()
+        print("reshape_paras", reshape_paras)
+        init_all(reshape_paras)
+        interactive_mode()
+    elif (mode == "grid"):
+        grid_plot(my_generator, output_filename)
     # draw_border()
 
 
@@ -392,4 +421,4 @@ if __name__ == "__main__":
         else:
             my_generator = my_processor.gen_points(
                 my_processor.gen_wrapper(tongue_client.gen()))
-        main(my_generator)
+        main(my_generator, "grid")
