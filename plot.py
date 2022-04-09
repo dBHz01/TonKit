@@ -305,6 +305,30 @@ def grid_plot(my_generator, output_filename):
 
         time.sleep(0.015)
 
+def cal_max_pressure(my_generator, continue_time):
+    start_time = time.time()
+    max_pressure = 0.0001
+    print("Please use max pressure to press.")
+    while (time.time() - start_time < continue_time):
+        row, col, val = next(my_generator)
+        if (val > max_pressure):
+            max_pressure = val
+    my_remote_handle.sendMaxForce(max_pressure)
+    print("End max pressure test, begin the experiment.\nMax pressure:", max_pressure)
+    return max_pressure
+
+
+def pressure_plot(my_generator, output_filename, max_pressure):
+    for _ in my_generator:
+        if stop_showing:
+            break
+
+        # generate data
+        row, col, val = next(my_generator)
+        my_remote_handle.sendPressure(val / max_pressure)
+
+        time.sleep(0.015)
+
 
 def interactive_mode(interactive=False):
     global gesture_typing_data, stop_showing, my_remote_handle, current_data, inst, is_recording
@@ -381,6 +405,9 @@ def main(my_generator, mode):
         interactive_mode()
     elif (mode == "grid"):
         grid_plot(my_generator, output_filename)
+    elif (mode == "pressure"):
+        max_pressure = cal_max_pressure(my_generator, 5)
+        pressure_plot(my_generator, output_filename, max_pressure)
     # draw_border()
 
 
@@ -421,4 +448,4 @@ if __name__ == "__main__":
         else:
             my_generator = my_processor.gen_points(
                 my_processor.gen_wrapper(tongue_client.gen()))
-        main(my_generator, "grid")
+        main(my_generator, "pressure")
