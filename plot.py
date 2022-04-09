@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import json
 import time
+import random
+import os
 from multiprocessing import Process
 try:
     import thread
@@ -15,7 +17,7 @@ except ImportError:
 from matsense.tools import load_config, make_action
 from matsense.uclient import Uclient
 from matsense.process import Processor
-from gesture_typing import check_top_k, init_all
+from gesture_typing import check_top_k, init_all, get_new_target_word
 
 BASE_DATA_DIR = "./data/"
 LETTER_IN_KEYBOARD = [['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', ''],
@@ -95,6 +97,18 @@ class CursorClient:
         paras = ['grid', x, y]
         self.my_socket.send(
             str(" ".join([str(item) for item in paras]) + "\n").encode())
+    
+    def sendTargetWord(self, word):
+        self.my_socket.send(('target' + " " + str(word) + "\n").encode())
+    
+    def sendRecordTimestamp(self, event):
+        self.my_socket.send(('timestamp' + " " + str(event) + "\n").encode())
+
+    def sendPressureRate(self, target, value):
+        self.my_socket.send(('rate' + " " + str(target) + " " + str(value) + "\n").encode())
+    
+    def sendTimeLeft(self, time):
+        self.my_socket.send(('timeleft' + " " + str(int(time)) + "\n").encode())
 
 
 my_remote_handle = CursorClient(IP, PORT)
@@ -271,11 +285,12 @@ def web_plot(my_generator, output_filename):
         row, col, val = next(my_generator)
         current_data = [row, col, val]
 
+        # record all data
+        if (output_filename != None):
+            with open(BASE_DATA_DIR + output_filename, "a") as file:
+                file.write(json.dumps([row, col, val, time.time()]) + "\n")
+        
         if (val > 1):
-            # record all data
-            if (output_filename != None):
-                with open(BASE_DATA_DIR + output_filename, "a") as file:
-                    file.write(json.dumps([row, col, val]) + "\n")
             my_remote_handle.sendToKBPlot("event", 2, row, col)
             gesture_typing_data.append(current_data)
         else:
@@ -292,12 +307,12 @@ def grid_plot(my_generator, output_filename):
         # generate data
         row, col, val = next(my_generator)
         current_data = [row, col, val]
+        # record all data
+        if (output_filename != None):
+            with open(BASE_DATA_DIR + output_filename, "a") as file:
+                file.write(json.dumps([row, col, val]) + "\n")
 
         if (val > 1):
-            # record all data
-            if (output_filename != None):
-                with open(BASE_DATA_DIR + output_filename, "a") as file:
-                    file.write(json.dumps([row, col, val]) + "\n")
             my_remote_handle.sendPos(row, col)
             gesture_typing_data.append(current_data)
         else:
@@ -319,20 +334,56 @@ def cal_max_pressure(my_generator, continue_time):
 
 
 def pressure_plot(my_generator, output_filename, max_pressure):
+    state = "idle"
+    random_level = 0
+    start_press_time = 0
     for _ in my_generator:
-        if stop_showing:
-            break
-
-        # generate data
-        row, col, val = next(my_generator)
-        my_remote_handle.sendPressure(val / max_pressure)
-
+        if (state == "idle"):
+            random_level = random.randint(0, 2)
+            if (random_level == 0):
+                my_remote_handle.sendPressureRate(50, 200)
+                random_level = 0.25
+            elif (random_level == 1):
+                my_remote_handle.sendPressureRate(100, 200)
+                random_level = 0.5
+            else:
+                my_remote_handle.sendPressureRate(150, 200)
+                random_level = 0.75
+            state = "wait"
+        elif (state == "wait"):
+            # generate data
+            row, col, val = next(my_generator)
+            my_remote_handle.sendPressure(val / max_pressure)
+            # record all data
+            if (output_filename != None):
+                with open(BASE_DATA_DIR + output_filename, "a") as file:
+                    file.write("wait " + json.dumps([row, col, val, time.time()]) + "\n")
+            if (val > random_level * max_pressure):
+                state = "press"
+                start_press_time = time.time()
+        elif (state == "press"):
+            if (time.time() - start_press_time < 5):
+                # generate data
+                row, col, val = next(my_generator)
+                my_remote_handle.sendPressure(val / max_pressure)
+                my_remote_handle.sendTimeLeft(5 - (time.time() - start_press_time))
+                # record all data
+                if (output_filename != None):
+                    with open(BASE_DATA_DIR + output_filename, "a") as file:
+                        file.write("press " + json.dumps([row, col, val, time.time()]) + "\n")
+            else:
+                my_remote_handle.sendTimeLeft(0)
+                row, col, val = next(my_generator)
+                if (val < 0.05 * max_pressure):
+                    state = "idle"
         time.sleep(0.015)
 
 
-def interactive_mode(interactive=False):
+def interactive_mode(mode, interactive=False):
     global gesture_typing_data, stop_showing, my_remote_handle, current_data, inst, is_recording
     last_press_time = None
+    chosen_word = None
+    target_word = None
     while True:
         if (interactive):
             inst = input()
@@ -352,6 +403,7 @@ def interactive_mode(interactive=False):
             print("stop recording")
             if (len(gesture_typing_data) == 0):
                 inst = "r"
+            my_remote_handle.sendRecordTimestamp("stop")
             is_recording = False
             top_k = check_top_k(gesture_typing_data, 10)
             my_remote_handle.setCandidates([i for i in top_k[:5]])
@@ -375,19 +427,32 @@ def interactive_mode(interactive=False):
             if (start_status[0]):
                 if (start_status[1]):
                     my_remote_handle.selectWord('left')
+                    chosen_word = top_k[3]
                 else:
                     my_remote_handle.selectWord('up')
+                    chosen_word = top_k[0]
             else:
                 if (start_status[1]):
                     my_remote_handle.selectWord('down')
+                    chosen_word = top_k[2]
                 else:
                     my_remote_handle.selectWord('right')
+                    chosen_word = top_k[1]
+            print("chosen word", chosen_word)
             inst = 'idle'
         elif (inst == 'idle'):
             if (current_data[2] < 1):
                 gesture_typing_data = []
                 inst = 'r'
+                if (mode == "training_keyboard"):
+                    ## send target word
+                    if target_word == None or chosen_word == None or chosen_word == target_word or try_times > 3:
+                        target_word = get_new_target_word()
+                        try_times = 0
+                        my_remote_handle.sendTargetWord(target_word)
+                    try_times += 1
                 print("start typing")
+                my_remote_handle.sendRecordTimestamp("start")
 
         time.sleep(0.1)
 
@@ -397,17 +462,22 @@ def main(my_generator, mode):
     # scatter_plot()
     # p = Process(target=web_plot, args=(my_generator, output_filename))
     # p.start()
-    if (mode == "keyboard"):
+    if (not os.path.exists(BASE_DATA_DIR)):
+        os.makedirs(BASE_DATA_DIR)
+    if (mode == "keyboard" or mode == "training_keyboard"):
         thread.start_new_thread(web_plot, (my_generator, output_filename))
         reshape_paras = get_reshape_paras()
         print("reshape_paras", reshape_paras)
         init_all(reshape_paras)
-        interactive_mode()
+        interactive_mode(mode)
     elif (mode == "grid"):
         grid_plot(my_generator, output_filename)
     elif (mode == "pressure"):
         max_pressure = cal_max_pressure(my_generator, 5)
         pressure_plot(my_generator, output_filename, max_pressure)
+    elif (mode == "draw"):
+        web_plot(my_generator, output_filename)
+        
     # draw_border()
 
 
@@ -448,4 +518,4 @@ if __name__ == "__main__":
         else:
             my_generator = my_processor.gen_points(
                 my_processor.gen_wrapper(tongue_client.gen()))
-        main(my_generator, "pressure")
+        main(my_generator, config['application']['mode'])

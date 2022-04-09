@@ -1,5 +1,6 @@
 import numpy as np
 from math import sqrt
+import random
 import matplotlib.pyplot as plt
 from queue import PriorityQueue
 from dtaidistance import dtw_ndim
@@ -8,9 +9,12 @@ LETTER_IN_KEYBOARD = [['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
                       ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
                       ['Z', 'X', 'C', 'V', 'B', 'N', 'M']]
 WORD_SET = set()
+WORD_LIST = list()
 DIST_PATTERN = {}
 STD_KB_POS = {}
 WORD_PROB = {}
+WORD_NUM = 3000
+WORD_DICT_NAME = "./data/word_5000.csv"
 
 
 def euclidean_distance(p: np.ndarray, q: np.ndarray) -> float:
@@ -18,22 +22,39 @@ def euclidean_distance(p: np.ndarray, q: np.ndarray) -> float:
 
 
 def init_all(reshape_paras):
-    init_word_set(5000)
+    init_word_set(WORD_NUM)
     init_keyboard_pos(reshape_paras)
     init_pattern_set()
 
 
 def init_word_set(num):
-    global WORD_PROB
-    with open("./data/words_10000.txt", 'r') as file:
-        lines = file.readlines()
-        for i in range(len(lines)):
-            if (i >= num):
-                return
-            word = lines[i].lower().replace('\n', '').split('\t')[0]
-            prob = float(lines[i].lower().replace('\n', '').split('\t')[2])
-            WORD_SET.add(word)
-            WORD_PROB[word] = prob
+    global WORD_PROB, WORD_LIST
+    with open(WORD_DICT_NAME, 'r') as file:
+        if (WORD_DICT_NAME == "./data/word_5000.csv"):
+            lines = file.readlines()
+            for i in range(len(lines)):
+                word = lines[i].lower().split(' ')[0]
+                if (word in WORD_SET):
+                    continue
+                if (num == 0):
+                    break
+                prob = float(lines[i].lower().split(' ')[2])
+                WORD_SET.add(word)
+                WORD_PROB[word] = prob
+                num -= 1
+        elif (WORD_DICT_NAME == "./data/words_10000.txt"):
+            lines = file.readlines()
+            for i in range(len(lines)):
+                word = lines[i].lower().replace('\n', '').split('\t')[0]
+                if (word in WORD_SET):
+                    continue
+                if (num == 0):
+                    break
+                prob = float(lines[i].lower().replace('\n', '').split('\t')[2])
+                WORD_SET.add(word)
+                WORD_PROB[word] = prob
+                num -= 1
+    WORD_LIST = list(WORD_SET)
 
 
 def generate_standard_pattern(word: str, num_nodes: int, distribute):
@@ -115,6 +136,9 @@ def init_keyboard_pos(reshape_paras):
                for i, letter in enumerate(LETTER_IN_KEYBOARD[2])})
     STD_KB_POS = pos
 
+
+def get_new_target_word():
+    return WORD_LIST[random.randint(0, WORD_NUM - 1)]
 
 def resample_path(path):
     sampleSize = 50

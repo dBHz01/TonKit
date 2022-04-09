@@ -120,3 +120,7 @@ visual:
   zlim: 10
   ## frame rate: 100
   fps: 100
+
+application:
+  ## application mode, including keyboard, grid, pressure, draw, training_keyboard
+  mode: training_keyboard
