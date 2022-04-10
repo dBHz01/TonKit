@@ -33,7 +33,8 @@ stop_showing = False
 current_data = None
 inst = None
 
-IP = "localhost"
+# IP = "localhost"
+IP = "47.93.21.175"
 PORT = 8081
 
 
