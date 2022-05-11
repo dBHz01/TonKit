@@ -14,7 +14,7 @@ DIST_PATTERN = {}
 STD_KB_POS = {}
 WORD_PROB = {}
 WORD_NUM = 3000
-WORD_DICT_NAME = "./data/word_5000.csv"
+WORD_DICT_NAME = "./data/words_10000.txt"
 
 
 def euclidean_distance(p: np.ndarray, q: np.ndarray) -> float:
@@ -141,12 +141,13 @@ def get_new_target_word():
     return WORD_LIST[random.randint(0, WORD_NUM - 1)]
 
 def resample_path(path):
-    sampleSize = 50
+    print("path", path)
+    sampleSize = 150
     n = len(path)
     ret = []
     if (n == 1):
         for i in range(sampleSize):
-            ret.append(path[0])
+            ret.append(list(path[0]))
         return ret
     length = 0
     for i in range(n-1):
@@ -155,7 +156,7 @@ def resample_path(path):
     lastPos = path[0]
     currLen = 0
     no = 1
-    ret.append(path[0])
+    ret.append(list(path[0]))
     while (no < n):
         dist = euclidean_distance(np.array(lastPos), np.array(path[no]))
         if (currLen + dist >= interval and dist > 0):
@@ -169,10 +170,12 @@ def resample_path(path):
             currLen = 0
         else:
             currLen += dist
-            lastPos = path[no]
+            lastPos = list(path[no])
             no += 1
     for i in range(len(ret), sampleSize):
-        ret.append(path[n - 1])
+        ret.append(list(path[n - 1]))
+    ret = np.array(ret)
+    print("ret", ret)
     return ret
 
 
@@ -195,6 +198,7 @@ def check_top_k(data, k):
     total += 1
     # x, y = downsample(x, y, depths, 2)
     user_path = np.array(list(zip(user_path_x, user_path_y)))
+    user_path = resample_path(user_path)
     q = PriorityQueue()
 
     for w in WORD_SET:
@@ -224,7 +228,7 @@ def check_top_k(data, k):
         #     d = 10**(-10)
 
         # q.put((0.6 * d2 - 0.4 * 0.1 * np.log10(d), w))
-        q.put((-1 * 0.4 * 0.5 * d1 + 0.6 * d2, w))
+        q.put((-1 * 0.2 * 0.5 * d1 + 0.8 * d2, w))
         # if (w == "is"):
         #     print("is", -1 * 0.4 * d1 + 0.6 * d2, d1, d2)
         # if (w == "quot"):

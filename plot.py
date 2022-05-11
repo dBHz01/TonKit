@@ -14,7 +14,7 @@ try:
     import thread
 except ImportError:
     import _thread as thread
-from matsense.tools import load_config, make_action
+from matsense.tools import load_config, make_action, parse_mask
 from matsense.uclient import Uclient
 from matsense.process import Processor
 from matsense.filemanager import write_line
@@ -56,28 +56,6 @@ class CursorClient:
     def close(self):
         self.my_socket.close()
         print("remote client socket closed")
-
-    # def sendToKB(self, touch_state, x, y):
-    #     paras = [touch_state, x, y]
-    #     self.my_socket.send(
-    #         str(" ".join([str(item) for item in paras]) + "\n").encode())
-
-    # def sendToKBPlot(self, type, touch_state, x, y):
-    #     # type should be in ['event', 'select', 'reshape']
-    #     paras = [type, touch_state, x, y]
-    #     self.my_socket.send(
-    #         str(" ".join([str(item) for item in paras]) + "\n").encode())
-
-    # def selectWord(self, selectDirection):
-    #     paras = ["select", selectDirection]
-    #     self.my_socket.send(
-    #         str(" ".join([str(item) for item in paras]) + "\n").encode())
-
-    # def reshapeKB(self, pos):
-    #     # pos should be [0-1] * 12, as q_pos.x, q_pos.y, p_pos.x ...
-    #     paras = ['reshape'] + pos
-    #     self.my_socket.send(
-    #         str(" ".join([str(item) for item in paras]) + "\n").encode())
 
     def setCandidates(self, cands):
         # len(cands) should >= 5
@@ -275,10 +253,13 @@ def get_reshape_paras():
     return reshape_paras
 
 
-def update_raw_data_wrapper(raw_generator):
+def update_raw_data_wrapper(raw_generator, cali_array = np.array([])):
     global raw_data
     while True:
         raw_data = next(raw_generator)
+        if (len(cali_array) > 0):
+            raw_data[cali_array>1] /= cali_array[cali_array>1]
+            raw_data[cali_array>1] *= 10
         yield raw_data
 
 
@@ -292,6 +273,7 @@ def web_plot(my_generator, output_filename):
         # generate data
         row, col, val = next(my_generator)
         current_data = [row, col, val]
+        # print(val)
 
         # record all data
         if (output_filename != None):
@@ -527,11 +509,16 @@ if __name__ == "__main__":
                         default=None, help="output filename")
     parser.add_argument('-f', dest='filename', action=make_action('store'),
                         default=None, help="filename read in")
+    parser.add_argument('-c', dest='cali_filename', action=make_action('store'),
+                        default=None, help="calibrate filename")
     args = parser.parse_args()
 
     config = load_config(args.config)
     output_filename = args.output
     input_filename = args.filename
+    cali_filename = args.cali_filename
+    with open(cali_filename, "r", encoding='UTF-8') as f:
+        cali_array = parse_mask(f.read())
 
     with Uclient(
         udp=config['connection']['udp'],
@@ -552,5 +539,5 @@ if __name__ == "__main__":
         else:
             my_generator = my_processor.gen_points(
                 update_raw_data_wrapper(
-                    my_processor.gen_wrapper(tongue_client.gen())))
+                    my_processor.gen_wrapper(tongue_client.gen()), cali_array))
         main(my_generator, config['application']['mode'])
