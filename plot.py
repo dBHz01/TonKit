@@ -1,6 +1,7 @@
 '''
     plot the pressure point on screen
 '''
+from collections import deque
 from socket import socket, AF_INET, SOCK_STREAM, timeout
 import argparse
 import matplotlib.pyplot as plt
@@ -9,6 +10,7 @@ import json
 import time
 import random
 import os
+import pyautogui
 from multiprocessing import Process
 try:
     import thread
@@ -35,9 +37,11 @@ current_data = None  # [row, col, val]
 raw_data = None
 inst = None
 
-IP = "localhost"
-# IP = "47.93.21.175"
+# IP = "localhost"
+IP = "47.93.21.175"
 PORT = 8081
+
+pyautogui.PAUSE = 0.005
 
 
 class CursorClient:
@@ -186,8 +190,8 @@ def scatter_plot(my_generator, output_filename):
 
         # record all data
         if (output_filename != None):
-            write_line(BASE_DATA_DIR + output_filename, raw_data.reshape(-1), [row, col, val, time.time()])
-
+            write_line(BASE_DATA_DIR + output_filename,
+                       raw_data.reshape(-1), [row, col, val, time.time()])
 
         plt.xlim(0, 1)
         plt.ylim(0, 1)
@@ -253,13 +257,13 @@ def get_reshape_paras():
     return reshape_paras
 
 
-def update_raw_data_wrapper(raw_generator, cali_array = np.array([])):
+def update_raw_data_wrapper(raw_generator, cali_array=np.array([])):
     global raw_data
     while True:
         raw_data = next(raw_generator)
         if (len(cali_array) > 0):
-            raw_data[cali_array>1] /= cali_array[cali_array>1]
-            raw_data[cali_array>1] *= 10
+            raw_data[cali_array > 1] /= cali_array[cali_array > 1]
+            raw_data[cali_array > 1] *= 10
         yield raw_data
 
 
@@ -277,7 +281,8 @@ def web_plot(my_generator, output_filename):
 
         # record all data
         if (output_filename != None):
-            write_line(BASE_DATA_DIR + output_filename, raw_data.reshape(-1), [row, col, val, time.time()])
+            write_line(BASE_DATA_DIR + output_filename,
+                       raw_data.reshape(-1), [row, col, val, time.time()])
 
         if (val > 1):
             my_remote_handle.sendCommand(["event", 2, row, col])
@@ -297,10 +302,10 @@ def grid_plot(my_generator, output_filename):
 
         # generate data
         row, col, val = next(my_generator)
-        current_data = [row, col, val]
         # record all data
         if (output_filename != None):
-            write_line(BASE_DATA_DIR + output_filename, raw_data.reshape(-1), [row, col, val, time.time()])
+            write_line(BASE_DATA_DIR + output_filename,
+                       raw_data.reshape(-1), [row, col, val, time.time()])
 
         if (val > 1):
             if row < BOTH_END_MARGIN:
@@ -318,6 +323,47 @@ def grid_plot(my_generator, output_filename):
             my_remote_handle.sendPos(-1, -1)
 
         time.sleep(0.015)
+
+
+def move_mouse(my_generator, output_filename):
+    global raw_data
+    MIN_VAL = 1
+    MOVE_WIN_SIZE = 5
+    MIN_MOVE_LEN = 0.06
+    last_movements = deque(maxlen=MOVE_WIN_SIZE)
+    last_point = np.array([])
+    movement = np.array([0, 0], dtype=float)
+    while True:
+        start_time = time.time()
+        # generate data
+        row, col, val = next(my_generator)
+        cur_point = np.array([row, col], dtype=float)
+        # record all data
+        if (output_filename != None):
+            write_line(BASE_DATA_DIR + output_filename,
+                       raw_data.reshape(-1), [row, col, val, time.time()])
+        if val > MIN_VAL:
+            if len(last_point) != 0:
+                cur_movement = cur_point - last_point
+                # print(cur_movement)
+                if len(last_movements) < MOVE_WIN_SIZE:
+                    if abs(cur_movement[0]) < MIN_MOVE_LEN and abs(cur_movement[1]) < MIN_MOVE_LEN:
+                        last_movements.append(cur_movement)
+                        movement += (cur_movement) / 5
+                else:
+                    if abs(cur_movement[0]) < MIN_MOVE_LEN and abs(cur_movement[1]) < MIN_MOVE_LEN:
+                        del_movement = last_movements.popleft()
+                        last_movements.append(cur_movement)
+                        movement -= del_movement / 5
+                        movement += (cur_movement) / 5
+                        pyautogui.move(
+                            movement[0] * 1000, -1 * movement[1] * 1000)
+                        # print(movement * 1000)
+                    # print([np.linalg.norm(i) for i in last_movements])
+            last_point = cur_point
+        time.sleep(0.002)
+        end_time = time.time()
+        # print("fps: ", str(1 / (end_time - start_time)))
 
 
 def cal_max_pressure(my_generator, continue_time):
@@ -355,7 +401,8 @@ def pressure_plot(my_generator, output_filename, max_pressure):
             state = "wait"
             my_remote_handle.sendCommand(["status", "wait"])
             if (output_filename != None):
-                write_line(BASE_DATA_DIR + output_filename, ["target", random_level])
+                write_line(BASE_DATA_DIR + output_filename,
+                           ["target", random_level])
 
         elif (state == "wait"):
             # generate data
@@ -363,7 +410,8 @@ def pressure_plot(my_generator, output_filename, max_pressure):
             my_remote_handle.sendPressure(val / max_pressure)
             # record all data
             if (output_filename != None):
-                write_line(BASE_DATA_DIR + output_filename, raw_data.reshape(-1), [row, col, val, time.time(), "wait"])
+                write_line(BASE_DATA_DIR + output_filename,
+                           raw_data.reshape(-1), [row, col, val, time.time(), "wait"])
                 # with open(BASE_DATA_DIR + output_filename, "a") as file:
                 #     file.write(
                 #         "wait " + json.dumps([row, col, val, time.time()]) + "\n")
@@ -380,7 +428,8 @@ def pressure_plot(my_generator, output_filename, max_pressure):
                     5 - (time.time() - start_press_time))
                 # record all data
                 if (output_filename != None):
-                    write_line(BASE_DATA_DIR + output_filename, raw_data.reshape(-1), [row, col, val, time.time(), "press"])
+                    write_line(BASE_DATA_DIR + output_filename,
+                               raw_data.reshape(-1), [row, col, val, time.time(), "press"])
                     # with open(BASE_DATA_DIR + output_filename, "a") as file:
                     #     file.write(
                     #         "press " + json.dumps([row, col, val, time.time()]) + "\n")
@@ -493,6 +542,8 @@ def main(my_generator, mode):
         pressure_plot(my_generator, output_filename, max_pressure)
     elif (mode == "draw"):
         web_plot(my_generator, output_filename)
+    elif (mode == "move_mouse"):
+        move_mouse(my_generator, output_filename)
 
     # draw_border()
 
@@ -514,11 +565,18 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     config = load_config(args.config)
-    output_filename = args.output
+    output_filename = None
+    if 'application' in config and 'filename' in config['application']:
+        output_filename = config['application']['filename']
+    if (args.output):
+        output_filename = args.output
     input_filename = args.filename
     cali_filename = args.cali_filename
-    with open(cali_filename, "r", encoding='UTF-8') as f:
-        cali_array = parse_mask(f.read())
+    if (cali_filename):
+        with open(cali_filename, "r", encoding='UTF-8') as f:
+            cali_array = parse_mask(f.read())
+    else:
+        cali_array = None
 
     with Uclient(
         udp=config['connection']['udp'],
@@ -536,8 +594,12 @@ if __name__ == "__main__":
             my_generator = file_generator(input_filename)
         elif (args.mock):
             my_generator = mock_generator()
-        else:
+        elif cali_array:
             my_generator = my_processor.gen_points(
                 update_raw_data_wrapper(
                     my_processor.gen_wrapper(tongue_client.gen()), cali_array))
+        else:
+            my_generator = my_processor.gen_points(
+                update_raw_data_wrapper(
+                    my_processor.gen_wrapper(tongue_client.gen())))
         main(my_generator, config['application']['mode'])
