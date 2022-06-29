@@ -13,7 +13,7 @@ WORD_LIST = list()
 DIST_PATTERN = {}
 STD_KB_POS = {}
 WORD_PROB = {}
-WORD_NUM = 3000
+WORD_NUM = 5000
 WORD_DICT_NAME = "./data/words_10000.txt"
 
 
@@ -29,6 +29,8 @@ def init_all(reshape_paras):
 
 def init_word_set(num):
     global WORD_PROB, WORD_LIST
+    WORD_SET.add("qzmp")
+    WORD_PROB["qzmp"] = 3.659327655609967e-05
     with open(WORD_DICT_NAME, 'r') as file:
         if (WORD_DICT_NAME == "./data/word_5000.csv"):
             lines = file.readlines()

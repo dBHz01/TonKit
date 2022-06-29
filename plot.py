@@ -37,8 +37,8 @@ current_data = None  # [row, col, val]
 raw_data = None
 inst = None
 
-# IP = "localhost"
-IP = "47.93.21.175"
+IP = "localhost"
+# IP = "47.93.21.175"
 PORT = 8081
 
 pyautogui.PAUSE = 0.005
