@@ -229,21 +229,24 @@ def scatter_plot(my_generator, output_filename):
     return
 
 
-def get_reshape_paras():
+def get_reshape_paras(skip_reshape=False):
     global current_data, inst
     reshape_paras = []
     pos_name = ['q_pos', 'p_pos', 'a_pos', 'l_pos', 'z_pos', 'm_pos']
     pos = [np.array([0.5 * (0.9 - 0.1) / 10 + 0.1, 0.85]), np.array([-0.5 * (0.9 - 0.1) / 10 + 0.9, 0.85]), np.array([0.5 * (0.8 - 0.2) / 9 + 0.2, 0.5]),
            np.array([-0.5 * (0.8 - 0.2) / 9 + 0.8, 0.5]), np.array([0.5 * (0.75 - 0.25) / 9 + 0.25, 0.15]), np.array([-0.5 * (0.75 - 0.25) / 9 + 0.75, 0.15])]
-    i = 0
-    while (len(reshape_paras) < 6):
-        input("please press " + pos_name[i])
-        # (q_pos, p_pos, a_pos, l_pos, z_pos, m_pos) .x
-        row = current_data[0]
-        reshape_paras.append(max(row, pos[i][0]) if (
-            i % 2 == 0) else min(row, pos[i][0]))
-        print(row)
-        i += 1
+    if (skip_reshape):
+        reshape_paras = [pos[i][0] for i in range(6)]
+    else:
+        i = 0
+        while (len(reshape_paras) < 6):
+            input("please press " + pos_name[i])
+            # (q_pos, p_pos, a_pos, l_pos, z_pos, m_pos) .x
+            row = current_data[0]
+            reshape_paras.append(max(row, pos[i][0]) if (
+                i % 2 == 0) else min(row, pos[i][0]))
+            print(row)
+            i += 1
     inst = "idle"
 
     # for reshaping the keyboard
@@ -522,7 +525,7 @@ def interactive_mode(mode, interactive=False):
         time.sleep(0.1)
 
 
-def main(my_generator, mode):
+def main(my_generator, mode, skip_reshape=False):
     # cali_each_point()
     # scatter_plot()
     # p = Process(target=web_plot, args=(my_generator, output_filename))
@@ -531,7 +534,7 @@ def main(my_generator, mode):
         os.makedirs(BASE_DATA_DIR)
     if (mode == "keyboard" or mode == "training_keyboard"):
         thread.start_new_thread(web_plot, (my_generator, output_filename))
-        reshape_paras = get_reshape_paras()
+        reshape_paras = get_reshape_paras(skip_reshape)
         print("reshape_paras", reshape_paras)
         init_all(reshape_paras)
         interactive_mode(mode)
@@ -562,6 +565,8 @@ if __name__ == "__main__":
                         default=None, help="filename read in")
     parser.add_argument('-c', dest='cali_filename', action=make_action('store'),
                         default=None, help="calibrate filename")
+    parser.add_argument('-s', dest='skip_reshape', action=make_action('store'),
+                        default=None, help="skip reshape")
     args = parser.parse_args()
 
     config = load_config(args.config)
@@ -602,4 +607,4 @@ if __name__ == "__main__":
             my_generator = my_processor.gen_points(
                 update_raw_data_wrapper(
                     my_processor.gen_wrapper(tongue_client.gen())))
-        main(my_generator, config['application']['mode'])
+        main(my_generator, config['application']['mode'], skip_reshape=args.skip_reshape)

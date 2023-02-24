@@ -13,7 +13,7 @@ WORD_LIST = list()
 DIST_PATTERN = {}
 STD_KB_POS = {}
 WORD_PROB = {}
-WORD_NUM = 5000
+WORD_NUM = 3500
 WORD_DICT_NAME = "./data/words_10000.txt"
 
 
@@ -106,7 +106,10 @@ def init_pattern_set():
         #     w_with_q = "q" + w
         dist_path = generate_standard_pattern(
             w_with_q, int((len(w) * 6.6457 + 4.2080) / 2),
-            lambda x: -2 * x**3 + 3 * x**2)
+            lambda x: x)
+        # dist_path = generate_standard_pattern(
+        #     w_with_q, int((len(w) * 6.6457 + 4.2080) / 2),
+        #     lambda x: -2 * x**3 + 3 * x**2)
         dist_path_x = [d[0] for d in dist_path]
         dist_path_y = [d[1] for d in dist_path]
         DIST_PATTERN[w] = list(zip(dist_path_x, dist_path_y))
@@ -142,8 +145,9 @@ def init_keyboard_pos(reshape_paras):
 def get_new_target_word():
     return WORD_LIST[random.randint(0, WORD_NUM - 1)]
 
+
 def resample_path(path):
-    print("path", path)
+    # print("path", path)
     sampleSize = 150
     n = len(path)
     ret = []
@@ -177,7 +181,7 @@ def resample_path(path):
     for i in range(len(ret), sampleSize):
         ret.append(list(path[n - 1]))
     ret = np.array(ret)
-    print("ret", ret)
+    # print("ret", ret)
     return ret
 
 
@@ -186,7 +190,7 @@ def check_top_k(data, k):
     data = [[x, y, z], ...]
     '''
     data = np.array(data)
-    print(data)
+    # print(data)
     total = 0
     # top_k = [0] * k
     prev = None
@@ -194,7 +198,7 @@ def check_top_k(data, k):
         return
     user_path_x = data[:, 0]
     user_path_y = data[:, 1]
-    depths = data[:, 2]
+    # depths = data[:, 2]
     # user = genVectors(x, y, depths)
     # word = get_word(i, j)
     total += 1
@@ -217,10 +221,10 @@ def check_top_k(data, k):
             continue
         d2 = dtw_ndim.distance_fast(user_path, np.array(
             pattern), use_pruning=True, window=8)
-        
+
         if (w in WORD_PROB):
             d1 = np.log10(WORD_PROB[w])
-        
+
         # # bigram probabilities
         # if prev in BIWORD_PROB and w in BIWORD_PROB[prev]:
         #     d = BIWORD_PROB[prev][w]
@@ -231,10 +235,7 @@ def check_top_k(data, k):
 
         # q.put((0.6 * d2 - 0.4 * 0.1 * np.log10(d), w))
         q.put((-1 * 0.2 * 0.5 * d1 + 0.8 * d2, w))
-        # if (w == "is"):
-        #     print("is", -1 * 0.4 * d1 + 0.6 * d2, d1, d2)
-        # if (w == "quot"):
-        #     print("quot", -1 * 0.4 * d1 + 0.6 * d2, d1, d2)
+        # q.put((d2, w))
 
     top = []
     top_acc = []
@@ -248,16 +249,18 @@ def check_top_k(data, k):
         except:
             break
     # print(word, top[:10])
-    print(top[:10])
-    print(top_acc[:10])
+    print(top[:k])
+    print(top_acc[:k])
     # prev = word
-    print("total: %d" % total)
+    # print("total: %d" % total)
     # for i in range(k):
     #     print("top%d acc: %f" % (i + 1, top_k[i] / total))
     return top[:k]
 
 
 if __name__ == "__main__":
-    init_word_set()
-    init_keyboard_pos()
-    check_top_k()
+    init_all([0.5 * (0.9 - 0.1) / 10 + 0.1, -0.5 * (0.9 - 0.1) / 10 + 0.9, 0.5 * (0.8 - 0.2) / 9 + 0.2,
+              -0.5 * (0.8 - 0.2) / 9 + 0.8, 0.5 * (0.75 - 0.25) / 9 + 0.25, -0.5 * (0.75 - 0.25) / 9 + 0.75])
+    for i in WORD_SET:
+        print(i)
+        check_top_k(DIST_PATTERN[i], 4)
