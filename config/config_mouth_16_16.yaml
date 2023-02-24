@@ -123,5 +123,5 @@ visual:
 
 application:
   ## application mode, including keyboard, grid, pressure, draw, training_keyboard, move_mouse
-  mode: move_mouse
-  filename: hello.csv
+  mode: keyboard
+  filename: test11.csv
