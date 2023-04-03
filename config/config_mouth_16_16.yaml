@@ -46,7 +46,7 @@ serial:
   ## serial port timeout, in seconds
   timeout: 1
   ## serial port
-  port: COM6
+  port: /dev/tty.usbmodem0006825199611
   ## data transmission protocol: simple, secure
   protocol: secure
   ## support IMU data
@@ -123,5 +123,5 @@ visual:
 
 application:
   ## application mode, including keyboard, grid, pressure, draw, training_keyboard, move_mouse
-  mode: keyboard
+  mode: move_mouse
   filename: test11.csv

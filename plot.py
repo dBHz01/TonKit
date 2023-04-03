@@ -12,10 +12,7 @@ import random
 import os
 import pyautogui
 from multiprocessing import Process
-try:
-    import thread
-except ImportError:
-    import _thread as thread
+import _thread as thread
 from matsense.tools import load_config, make_action, parse_mask
 from matsense.uclient import Uclient
 from matsense.process import Processor
