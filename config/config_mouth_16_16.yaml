@@ -54,7 +54,7 @@ serial:
 
 connection:  ## use defaults
   ## use UDP or UNIX domain socket
-  udp: ~
+  udp: true
   ## udp address format: 127.0.0.1:20503
   ## UNIX deomain socket address format: /var/tmp/unix.socket.server
   server_address: ~
