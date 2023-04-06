@@ -42,16 +42,36 @@ def update_raw_data_wrapper(raw_generator, cali_array=np.array([])):
         yield raw_data
 
 
+def check_click_area(cur_point):
+    '''
+    check if the current point is in the click area
+    '''
+    print(cur_point)
+    click_area = np.array([0, 0.8, 1, 0.2]) # [x, y, w, h]
+    if (
+        cur_point[0] > click_area[0]
+        and cur_point[0] < click_area[0] + click_area[2]
+        and cur_point[1] > click_area[1]
+        and cur_point[1] < click_area[1] + click_area[3]
+    ):
+        return True
+    else:
+        return False
+
+
 def move_cursor(my_generator, output_filename):
     global raw_data
     MIN_VAL = 2
     MOVE_WIN_SIZE = 5
     MAX_MOVE_LEN = 0.06
-    last_movements = deque(maxlen=MOVE_WIN_SIZE)
+    LONG_PRESS_TIME = 0.6
+    last_movements = deque(maxlen=MOVE_WIN_SIZE + 1)
     last_point = np.array([])
     movement = np.array([0, 0], dtype=float)
     one_euro_filter_x = None
     one_euro_filter_y = None
+    in_click_area_start_time = 0 # 0 means no data, -1 means out of click area, >0 means in click area
+    is_long_pressing = False
     while True:
         start_time = time.time()
 
@@ -70,36 +90,61 @@ def move_cursor(my_generator, output_filename):
         if val > MIN_VAL:  # remove low value
             # print(val)
             if len(last_point) == 0:
-                one_euro_filter_x = OneEuroFilter(
-                    time.time(), row, beta=0.006
-                )  # init filter
-                one_euro_filter_y = OneEuroFilter(
-                    time.time(), col, beta=0.006
-                )  # init filter
+                # init filter
+                one_euro_filter_x = OneEuroFilter(time.time(), row, beta=0.006)
+                one_euro_filter_y = OneEuroFilter(time.time(), col, beta=0.006)
             else:
+                # get filtered data
                 cur_point = np.array(
                     [
                         one_euro_filter_x(time.time(), row),
                         one_euro_filter_y(time.time(), col),
                     ],
                     dtype=float,
-                ) # get filtered data
-                # cur_point = np.array([row, col], dtype=float) # get raw data
-                cur_movement = cur_point - last_point
+                )
+                # get raw data
+                # cur_point = np.array([row, col], dtype=float)
 
-                # moving average
-                if (
-                    abs(cur_movement[0]) < MAX_MOVE_LEN
-                    and abs(cur_movement[1]) < MAX_MOVE_LEN
-                ):
-                    last_movements.append(cur_movement)
-                    movement += cur_movement / 5
-                    if len(last_movements) > MOVE_WIN_SIZE:
-                        del_movement = last_movements.popleft()
-                        movement -= del_movement / 5
-                        pyautogui.move(movement[0] * 1000, -1 * movement[1] * 1000)
+                if in_click_area_start_time >= 0:
+                    if check_click_area(cur_point):
+                        if in_click_area_start_time == 0:
+                            in_click_area_start_time = time.time()
+                    else:
+                        # out of click area
+                        in_click_area_start_time = -1
+                else:
+                    cur_movement = cur_point - last_point
 
+                    # move cursor with moving average
+                    if (
+                        abs(cur_movement[0]) < MAX_MOVE_LEN
+                        and abs(cur_movement[1]) < MAX_MOVE_LEN
+                    ):
+                        last_movements.append(cur_movement)
+                        movement += cur_movement / 5
+                        if len(last_movements) > MOVE_WIN_SIZE:
+                            del_movement = last_movements.popleft()
+                            movement -= del_movement / 5
+                            pyautogui.move(movement[0] * 1000, -1 * movement[1] * 1000)
             last_point = cur_point
+        elif len(last_point) > 0:
+            # end of movement
+            if in_click_area_start_time > 0:
+                print(time.time() - in_click_area_start_time)
+                if time.time() - in_click_area_start_time > LONG_PRESS_TIME:
+                    print("long press")
+                    pyautogui.mouseDown()
+                    is_long_pressing = True
+                else:
+                    if is_long_pressing:
+                        pyautogui.mouseUp()
+                        is_long_pressing = False
+                    else:
+                        print("click")
+                        pyautogui.click()
+            in_click_area_start_time = 0
+                
+
         time.sleep(0.002)
         end_time = time.time()
         # print("fps: ", str(1 / (end_time - start_time)))
